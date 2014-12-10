@@ -12,6 +12,11 @@
 #include <wayland-client.h>
 #include "simple.h"
 
+/* RGBA32 pixel */
+struct pixel {
+        uint8_t b, g, r, a;
+};
+
 /* Unlock buffer when wayland is done with it. */
 static void buffer_release(void *data, struct wl_buffer *buffer) {
         struct my_buffer *my_buffer = data;
@@ -115,7 +120,7 @@ struct my_buffer *select_buffer(struct my_window *window)
                 printf("Window resized, destroying buffer %d\n", buf_num);
                 wl_buffer_destroy(buffer->buffer);
                 buffer->buffer = NULL;
-        }
+        } 
                 
         if (!buffer->buffer) {
                 int32_t mem_offset = max_buffer_size * buf_num;
@@ -136,9 +141,46 @@ struct my_buffer *select_buffer(struct my_window *window)
                 wl_buffer_add_listener(buffer->buffer, &buffer_listener, buffer);
 
                 buffer->data = (char*)window->shm_data + mem_offset;
+        } else {
+                return NULL;
         }
 
         return buffer;
+}
+
+#define SQR(_X) ((_X)*(_X))
+
+void paint_pixel(struct pixel *pixel, double x, double y)
+{
+        const int MAX = 100;
+        
+        double x0 = x * 2;
+        double y0 = y * 2;
+        
+        double zx = 0;
+        double zy = 0;
+        int i = 0;
+
+        while ( SQR(zx) + SQR(zy) < 4.0
+                && i < MAX) {
+                
+                double xtemp = SQR(zx) - SQR(zy)  + x0;
+                zy = 2*zx*zy + y0;
+                zx = xtemp;
+                i++;
+        }
+
+        if (i < MAX) {
+                pixel->a = 128;
+                pixel->r = 0;
+                pixel->g = 0;
+                pixel->b = 0;
+        } else {
+                pixel->a = 255;
+                pixel->r = 255;
+                pixel->g = 255;
+                pixel->b = 255;
+        }
 }
 
 /*
@@ -150,15 +192,14 @@ void draw(void *data_, struct wl_callback *callback, uint32_t serial)
         struct my_buffer *buffer;
         int32_t i;
         int32_t x, y;
-        // double x, y;
-        // int n_pixels;
-        
-        
-        struct pixel {
-                uint8_t b, g, r, a;
-        } *buffer_data;
-        
+        int32_t width, height;
         time_t curr_time;
+
+        /* Translated x,y pixel coords to cartesian cooridinates with 0,0 in middle */
+        double xx, yy;
+        double max_xx, max_yy;
+        
+        struct pixel *buffer_data;
 
         /* Fps counter */
         static struct fps_counter {
@@ -166,34 +207,39 @@ void draw(void *data_, struct wl_callback *callback, uint32_t serial)
                 int frames;
         } fps_counter = { 0, 0 };
         
-        // n_pixels = window->width * window->height;
-
         buffer = select_buffer(window);
         if (!buffer) {
-                fprintf(stderr,
-                        "%s\n",
-                        (callback == NULL) ? "Failed to create buffer.\n" :
-                        "Both buffers are busy");
-                abort();
+                goto done;
         }
 
+        width = window->width;
+        height = window->height;
+        
         buffer_data = buffer->data;
         assert(buffer_data != NULL);
 
         // printf("Drawing greyness\n");
         // printf("Buffer offset = %zd\n",  (char*)buffer_data - (char*)window->shm_data);
         
+        if (width > height) {
+                max_yy = 1.0;
+                max_xx = (double)width / (double)height;
+        } else {
+                max_xx = 1.0;
+                max_yy = (double)height / (double)width;
+        }
+        
         for (y = 0; y < buffer->height; y++) {
                 for (x = 0; x < buffer->width; x++) {
+
+                        xx = 2.0 * (double)x / (double)width - 1.0;
+                        yy = 2.0 * (double)y / (double)height - 1.0;
+
+                        xx *= max_xx; yy *= max_yy;
+                        
                         i = x + (y * buffer->stride)/4;
-                        // buffer_data[i] = (struct pixel){ 128, 128, 128, 128 };
-
-                        double rr, gg, bb;
-                        rr = 255 * (double)x / (double)buffer->width;
-                        gg = 255 * (double)y / (double)buffer->height;
-                        bb = 255 * (double)(x+y)/2 / (double)((buffer->width + buffer->height)/2);
-
-                        buffer_data[i] = (struct pixel){ bb, gg, rr, (0.7*255) };
+                        paint_pixel(&buffer_data[i], xx, yy);
+                        // buffer_data[i] = (struct pixel){ bb, gg, rr, (0.7*255) };
                 }
         }
         // printf("Done drawing\n");
@@ -208,19 +254,26 @@ void draw(void *data_, struct wl_callback *callback, uint32_t serial)
         /*         buffer_data[i].b = 0; // alpha */
         /* } */
 
+        
+        /* Update surface */
+        
         /* Tell compositor what to draw. */
         wl_surface_attach(window->surface, buffer->buffer, 0, 0);
         /* Tell compositor that it needs to draw */
         wl_surface_damage(window->surface, 0, 0, window->width, window->height);
 
+done:
+        /* End frame render */
         if (callback)
                 wl_callback_destroy(callback);
 
         window->callback = wl_surface_frame(window->surface);
         wl_callback_add_listener(window->callback, &frame_listener, window);
         wl_surface_commit(window->surface);
-        buffer->busy = 1;
+        if (buffer)
+                buffer->busy = 1;
 
+        /* fps counter */
         fps_counter.frames++;
         time(&curr_time);
         if (curr_time != fps_counter.last_start) {
