@@ -116,6 +116,11 @@ void destroy_display(struct my_display *display)
                 display->shm = NULL;
         }
 
+        if (display->output) {
+                wl_output_destroy(display->output);
+                display->output = NULL;
+        }
+
         wl_registry_destroy(display->registry); display->registry = NULL;
         wl_display_flush(display->display); 
         wl_display_disconnect(display->display); display->display = NULL;

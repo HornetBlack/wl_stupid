@@ -78,8 +78,11 @@ void destroy_window(struct my_window *window)
         if (window->shm_pool) {
                 wl_shm_pool_destroy(window->shm_pool);
                 munmap(window->shm_data,
-                       window->display->width * window->display->height * 4 * BUFFERS);
+                       window->display->width *
+                       window->display->height * 4 * BUFFERS);
                 remove(window->shm_fname);
+                free(window->shm_fname);
+                window->shm_fname = NULL;
                 window->shm_pool = NULL;
         }
         
