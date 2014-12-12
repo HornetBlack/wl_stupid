@@ -6,6 +6,9 @@
 #include <wayland-client.h>
 #include "simple.h"
 
+#define MAX(_A, _B) ((_A)>(_B)?(_A):(_B))
+#define MIN(_A, _B) ((_A)<(_B)?(_A):(_B))
+
 static void shell_surface_ping(void *data,
                                struct wl_shell_surface *wl_shell_surface,
                                uint32_t serial);
@@ -115,8 +118,8 @@ static void shell_surface_configure(void *data,
         struct my_window *window = data;
         printf("Config = (%u, %d, %d)\n", edges, width, height);
 
-        window->width = width;
-        window->height = height;
+        window->width = MIN(width, window->display->width);
+        window->height = MIN(height, window->display->height);
 }
 
 /* Some shit about popups. */

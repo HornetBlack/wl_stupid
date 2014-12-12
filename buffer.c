@@ -152,10 +152,10 @@ struct my_buffer *select_buffer(struct my_window *window)
 
 void paint_pixel(struct pixel *pixel, double x, double y)
 {
-        const int MAX = 100;
+        const int MAX = 50;
         
-        double x0 = x * 2;
-        double y0 = y * 2;
+        double x0 = x / 2;
+        double y0 = y / 2;
         
         double zx = 0;
         double zy = 0;
@@ -171,7 +171,7 @@ void paint_pixel(struct pixel *pixel, double x, double y)
         }
 
         if (i < MAX) {
-                pixel->a = 128;
+                pixel->a = ((double)i/(double)MAX) * 255;
                 pixel->r = 0;
                 pixel->g = 0;
                 pixel->b = 0;
@@ -231,15 +231,18 @@ void draw(void *data_, struct wl_callback *callback, uint32_t serial)
         
         for (y = 0; y < buffer->height; y++) {
                 for (x = 0; x < buffer->width; x++) {
-
-                        xx = 2.0 * (double)x / (double)width - 1.0;
-                        yy = 2.0 * (double)y / (double)height - 1.0;
-
-                        xx *= max_xx; yy *= max_yy;
-                        
                         i = x + (y * buffer->stride)/4;
-                        paint_pixel(&buffer_data[i], xx, yy);
-                        // buffer_data[i] = (struct pixel){ bb, gg, rr, (0.7*255) };
+                        if (y < 10 || y + 10 > buffer->height
+                            || x < 10 || x + 10 > buffer->width) {
+                                /* Decoration */
+                                buffer_data[i] = (struct pixel){ 128, 128, 128, 255 };
+                        } else {
+                                xx = 2.0 * (double)x / (double)width - 1.0;
+                                yy = 2.0 * (double)y / (double)height - 1.0;
+                                
+                                xx *= max_xx; yy *= max_yy;
+                                paint_pixel(&buffer_data[i], xx, yy);
+                        }
                 }
         }
         // printf("Done drawing\n");
