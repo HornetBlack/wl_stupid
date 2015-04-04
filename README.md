@@ -32,7 +32,7 @@ Requires:
 
 ## Running
 
-Ensure you are in a wayland compositor. (So $WAYLAND_DISPLAY is set).
+Ensure you are in a wayland compositor. (So `$WAYLAND_DISPLAY` is set).
 Then run `./simple`. 
 
 If successful you should have semitransparent window
@@ -49,7 +49,7 @@ But this will require per frame rendering.
 As it doesn't dynamically accept wl_output objects correctly,
 hot plugging screens may not work well.
 Although I suspect that the only problem is that window cannot be bigger
-than the first output is was told about. (Which should be hand
+than the first output is was told about. (Which should be handled well)
 
 ## Todo ##
 
