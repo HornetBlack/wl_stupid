@@ -34,7 +34,7 @@ int main(void)
 
         /* Create a window */
         printf("Creating a window\n");
-        window = create_window(display, MAX_WIDTH, MAX_HEIGHT);
+        window = create_window(display, MIN_WIDTH, MIN_HEIGHT);
         if (!window)
                 return 1;
         printf("Window created\n");
@@ -50,7 +50,7 @@ int main(void)
         wl_surface_damage(window->surface, 0, 0, window->width, window->height);
         /* Draw first screen which allocates buffer(s). */
         draw(window, NULL, 0);
-
+       
         printf("Starting loop\n");
         /* Main loop */
         while (running) {

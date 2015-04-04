@@ -12,6 +12,9 @@
 #include <wayland-client.h>
 #include "simple.h"
 
+#define BROT
+
+
 /* RGBA32 pixel */
 struct pixel {
         uint8_t b, g, r, a;
@@ -31,13 +34,20 @@ static const struct wl_callback_listener frame_listener = {
         draw,
 };
 
+enum { N_BALLS = 30 };
+
+struct metaball {
+        double x, y;
+        double dx, dy;
+} global_balls[N_BALLS];
+
 /**
  * Create a shared memory object and return the fd.
  */
 static int create_shm(size_t size,
                       char **fname)
 {
-        const char template[] = "tmp-hello-wayland-XXXXXX";
+        const char template[] = "/tmp/hello-wayland-XXXXXX";
         char *tmpname;
         int fd;
 
@@ -58,8 +68,9 @@ static int create_shm(size_t size,
         }
 
         if (fname != NULL) {
-                *fname = tmpname;
+                //*fname = tmpname;
         }
+        remove(tmpname);
 
         return fd;
 }
@@ -142,7 +153,7 @@ struct my_buffer *select_buffer(struct my_window *window)
 
                 buffer->data = (char*)window->shm_data + mem_offset;
         } else {
-                return NULL;
+                // return NULL;
         }
 
         return buffer;
@@ -150,7 +161,30 @@ struct my_buffer *select_buffer(struct my_window *window)
 
 #define SQR(_X) ((_X)*(_X))
 
-void paint_pixel(struct pixel *pixel, double x, double y)
+void paint_meta_pixel(struct pixel *pixel, double x, double y)
+{
+        const double RADIUS = 0.001;
+        
+        int i;
+        struct metaball *ball;
+        double sum = 0.0;
+
+        for (i = 0; i < N_BALLS; i++) {
+                ball = &global_balls[i];
+                sum += 1.0 / (SQR(x - ball->x) + SQR(y - ball->y));
+
+                if (SQR(x - ball->x) + SQR(y - ball->y) < RADIUS){
+                        // red = 255;
+                }                
+        }
+                
+        pixel->b = 0;
+        pixel->a = (sum > 255) ? 255 : 0;
+        pixel->r = 0;
+        pixel->g = (sum > 255) ? 255 : 0;
+}
+
+void paint_brot_pixel(struct pixel *pixel, double x, double y)
 {
         const int MAX = 50;
         
@@ -209,7 +243,7 @@ void draw(void *data_, struct wl_callback *callback, uint32_t serial)
         
         buffer = select_buffer(window);
         if (!buffer) {
-                goto done;
+                //goto done;
         }
 
         width = window->width;
@@ -220,7 +254,7 @@ void draw(void *data_, struct wl_callback *callback, uint32_t serial)
 
         // printf("Drawing greyness\n");
         // printf("Buffer offset = %zd\n",  (char*)buffer_data - (char*)window->shm_data);
-        
+
         if (width > height) {
                 max_yy = 1.0;
                 max_xx = (double)width / (double)height;
@@ -228,21 +262,47 @@ void draw(void *data_, struct wl_callback *callback, uint32_t serial)
                 max_xx = 1.0;
                 max_yy = (double)height / (double)width;
         }
+
+#ifndef BROT
+        for (i = 0; i < N_BALLS; i++) {
+                struct metaball *ball = &global_balls[i];
+                if (!callback) {
+                        const double MAX_SPEED = 0.005;
+                        
+                        /* First call, setup metaballs */
+                        ball->x  = 2.0 * (double)rand()/RAND_MAX - 1.0;
+                        ball->y  = 2.0 * (double)rand()/RAND_MAX - 1.0;
+                        ball->dx = 2 * MAX_SPEED * (double)rand()/RAND_MAX - MAX_SPEED;
+                        ball->dy = 2 * MAX_SPEED * (double)rand()/RAND_MAX - MAX_SPEED;
+                        printf("ball %d: (%lf, %lf) at (%lf, %lf)\n",
+                               i, ball->x, ball->y, ball->dx, ball->dy);
+
+                } else {
+                        /* Update balls */
+                        ball->x += ball->dx;
+                        ball->y += ball->dy;
+        
+                        if (ball->x > 1.0 || ball->x < -1.0)
+                                ball->dx *= -1;
+                        if (ball->y > 1.0 || ball->y < -1.0)
+                                ball->dy *= -1;
+                }
+        }
+#endif
         
         for (y = 0; y < buffer->height; y++) {
                 for (x = 0; x < buffer->width; x++) {
                         i = x + (y * buffer->stride)/4;
-                        if (y < 10 || y + 10 > buffer->height
-                            || x < 10 || x + 10 > buffer->width) {
-                                /* Decoration */
-                                buffer_data[i] = (struct pixel){ 128, 128, 128, 255 };
-                        } else {
-                                xx = 2.0 * (double)x / (double)width - 1.0;
-                                yy = 2.0 * (double)y / (double)height - 1.0;
-                                
-                                xx *= max_xx; yy *= max_yy;
-                                paint_pixel(&buffer_data[i], xx, yy);
-                        }
+
+                        xx = 2.0 * (double)x / (double)width - 1.0;
+                        yy = 2.0 * (double)y / (double)height - 1.0;
+                        
+                        xx *= max_xx; yy *= max_yy;
+#ifdef BROT
+                        paint_brot_pixel(&buffer_data[i], xx, yy);
+#else
+                        paint_meta_pixel(&buffer_data[i], xx, yy);
+#endif
                 }
         }
         // printf("Done drawing\n");
@@ -265,7 +325,7 @@ void draw(void *data_, struct wl_callback *callback, uint32_t serial)
         /* Tell compositor that it needs to draw */
         wl_surface_damage(window->surface, 0, 0, window->width, window->height);
 
-done:
+// done:
         /* End frame render */
         if (callback)
                 wl_callback_destroy(callback);
